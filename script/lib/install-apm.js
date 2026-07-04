@@ -35,11 +35,14 @@ module.exports = function(ci) {
       cwd: CONFIG.apmRootPath
     });
     pinBundledNodeVersionToRunningNode();
-    warmNodeGypHeaderCache();
     childProcess.execFileSync(npmBin, ['rebuild', '--loglevel=error'], {
       env: process.env,
       cwd: CONFIG.apmRootPath
     });
+    // Only now does apm/node_modules/atom-package-manager/bin/node exist
+    // (the rebuild above is what downloads it), so the cache can only be
+    // warmed with it after this point.
+    warmNodeGypHeaderCache();
   } else {
     childProcess.execFileSync(npmBin, installArgs, {
       env: process.env,
