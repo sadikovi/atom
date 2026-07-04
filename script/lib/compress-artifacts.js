@@ -4,6 +4,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const spawnSync = require('./spawn-sync');
 const { path7za } = require('7zip-bin');
+const hostArch = require('@electron/get').getHostArch();
 
 const CONFIG = require('../config');
 
@@ -14,16 +15,25 @@ module.exports = function(packagedAppPath) {
   if (process.platform === 'darwin') {
     const symbolsArchivePath = path.join(
       CONFIG.buildOutputPath,
-      'atom-mac-symbols.zip'
+      getMacSymbolsArchiveName()
     );
     compress(CONFIG.symbolsPath, symbolsArchivePath);
   }
 };
 
+function getMacSymbolsArchiveName() {
+  // Keep the traditional unsuffixed name for x64 (the release pipeline and
+  // auto-updater expect it), and suffix native Apple Silicon builds so they
+  // don't collide with it when both are built side by side.
+  return hostArch === 'arm64'
+    ? 'atom-mac-arm64-symbols.zip'
+    : 'atom-mac-symbols.zip';
+}
+
 function getArchiveName() {
   switch (process.platform) {
     case 'darwin':
-      return 'atom-mac.zip';
+      return hostArch === 'arm64' ? 'atom-mac-arm64.zip' : 'atom-mac.zip';
     case 'win32':
       return `atom-${process.arch === 'x64' ? 'x64-' : ''}windows.zip`;
     default:

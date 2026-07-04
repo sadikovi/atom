@@ -1,0 +1,94 @@
+name: Build macOS (arm64 native)
+
+# Manually-triggered build of Atom.app for Apple Silicon Macs, built and
+# packaged fully natively as aarch64 (no Rosetta translation anywhere in
+# the toolchain).
+on:
+  workflow_dispatch:
+    inputs:
+      code-sign:
+        description: 'Code-sign and notarize the build (requires the mac code-signing secrets to be configured on this repo)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (arm64)
+    runs-on: macos-14
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (native arm64)
+        uses: actions/setup-node@v4
+        with:
+          # Node didn't ship a darwin-arm64 binary until v16.0.0, so this is
+          # the oldest Node that can run natively on Apple Silicon (no
+          # Rosetta). 16.20.2 is the last Node 16 LTS release.
+          node-version: '16.20.2'
+          architecture: arm64
+
+      - name: Set up Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Verify this is a true native build, not Rosetta
+        run: |
+          set -e
+          actual_uname="$(uname -m)"
+          echo "uname -m: $actual_uname"
+          if [ "$actual_uname" != "arm64" ]; then
+            echo "::error::Runner reports '$actual_uname' instead of arm64"
+            exit 1
+          fi
+
+          node_arch="$(node -p process.arch)"
+          echo "node process.arch: $node_arch"
+          if [ "$node_arch" != "arm64" ]; then
+            echo "::error::Node.js is running as '$node_arch' instead of native arm64 (likely under Rosetta)"
+            exit 1
+          fi
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-arm64-electron-${{ hashFiles('package.json') }}
+
+      - name: Build Atom.app
+        # Code-signing (when enabled) picks up the same secrets used by the
+        # existing release pipeline; see script/lib/code-sign-on-mac.js and
+        # script/lib/notarize-on-mac.js for the required env vars.
+        env:
+          PYTHON: python3
+          ATOM_MAC_CODE_SIGNING_CERT_DOWNLOAD_URL: ${{ secrets.ATOM_MAC_CODE_SIGNING_CERT_DOWNLOAD_URL }}
+          ATOM_MAC_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.ATOM_MAC_CODE_SIGNING_CERT_PASSWORD }}
+          ATOM_MAC_CODE_SIGNING_KEYCHAIN: ${{ secrets.ATOM_MAC_CODE_SIGNING_KEYCHAIN }}
+          ATOM_MAC_CODE_SIGNING_KEYCHAIN_PASSWORD: ${{ secrets.ATOM_MAC_CODE_SIGNING_KEYCHAIN_PASSWORD }}
+          AC_USER: ${{ secrets.AC_USER }}
+          AC_PASSWORD: ${{ secrets.AC_PASSWORD }}
+        run: |
+          script/build --compress-artifacts ${{ inputs.code-sign && '--code-sign' || '' }}
+
+      - name: Upload Atom.app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: atom-mac-arm64
+          path: out/*.zip
+          if-no-files-found: error
+
+      - name: Upload debug symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: atom-mac-arm64-symbols
+          path: out/*symbols.zip
+          if-no-files-found: warn

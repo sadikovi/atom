@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const electronLink = require('electron-link');
 const terser = require('terser');
+const hostArch = require('@electron/get').getHostArch();
 const CONFIG = require('../config');
 
 module.exports = function(packagedAppPath) {
@@ -330,10 +331,14 @@ module.exports = function(packagedAppPath) {
         process.platform === 'darwin' &&
         snapshotBinary === 'v8_context_snapshot.bin'
       ) {
-        // TODO: check if we're building for arm64 and use the arm64 version of the binary
+        // Electron's macOS builds name the v8 context snapshot after the
+        // CPU architecture it was built for (Contents/Frameworks/Electron
+        // Framework.framework/Resources), so match that here to support
+        // native arm64 builds in addition to x86_64.
+        const snapshotArch = hostArch === 'arm64' ? 'arm64' : 'x86_64';
         destinationPath = path.join(
           startupBlobDestinationPath,
-          'v8_context_snapshot.x86_64.bin'
+          `v8_context_snapshot.${snapshotArch}.bin`
         );
       }
       console.log(`Moving generated startup blob into "${destinationPath}"`);
