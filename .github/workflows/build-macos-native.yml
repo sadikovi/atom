@@ -70,6 +70,15 @@ jobs:
         # script/lib/notarize-on-mac.js for the required env vars.
         env:
           PYTHON: python3
+          # A number of this project's native modules (e.g. oniguruma, used
+          # by both apm and first-mate) use std::remove_cv_t, a C++14 alias
+          # template, without node-gyp passing an explicit -std= flag. Newer
+          # Xcode/Clang no longer default to a dialect that exposes it,
+          # which breaks the build with "'T' does not refer to a value" /
+          # "no member named 'remove_cv_t'" deep in Node's v8-internal.h.
+          # See https://github.com/nodejs/nan/issues/923 and
+          # https://github.com/nodejs/node/issues/38367.
+          CXXFLAGS: '-std=c++14'
           ATOM_MAC_CODE_SIGNING_CERT_DOWNLOAD_URL: ${{ secrets.ATOM_MAC_CODE_SIGNING_CERT_DOWNLOAD_URL }}
           ATOM_MAC_CODE_SIGNING_CERT_PASSWORD: ${{ secrets.ATOM_MAC_CODE_SIGNING_CERT_PASSWORD }}
           ATOM_MAC_CODE_SIGNING_KEYCHAIN: ${{ secrets.ATOM_MAC_CODE_SIGNING_KEYCHAIN }}
